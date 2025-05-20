@@ -31,6 +31,7 @@ python ./codes/train_psychadapter.py \
 	--output_dir ./checkpoints/big5_model \
 	--model_name_or_path google/gemma-2b \
 	--latent_size 5 \
+	--do_lower_case \
 	--per_gpu_train_batch_size 32 \
 	--per_gpu_eval_batch_size 32 \
 	--gradient_accumulation_steps 2 \
