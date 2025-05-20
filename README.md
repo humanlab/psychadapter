@@ -22,7 +22,7 @@ pip install peft=="0.10.0"
 ## Instructions for training and generating text with PsychAdapter
 
 ### Training
-We train PsychAdapter using the following command format. There are many configurations for the training process that can be modifed (e.g., number of epochs, learning rates). Run `python3 ./train_psychadapter.py -h` for more information. The code reads the data from `./processed_data` directory then begins the training process. A directory `./trained_models` will be created containing the trained model.
+We train PsychAdapter using the following command format. The LLM base models can be set through argument `--model_name_or_path`. Run `python3 ./train_psychadapter.py -h` for more information. The code reads the data from `./processed_data` directory then begins the training process. A directory `./trained_models` will be created containing the trained model.
 ```
 # Training Big Five personalities PsychAdapter
 python ./codes/train_psychadapter.py \
@@ -44,7 +44,7 @@ python ./codes/train_psychadapter.py \
 ```
 
 ### Inferencing
-After training, PsychAdapter can be used to generate text corresponding to all interested dimensions, using the following command. The code loops through all variables and generates text from the high and low value of each variable, controled by the `std_range` and `generate_interval` arguments. There are many configurations for the generating process that can be modifed (e.g., number of generated sentences, nuclous sampling parameters). Run `python3 ./inference_psychadapter.py -h` for more information.
+After training, PsychAdapter can be used to generate text corresponding to all interested dimensions, using the following command. The code loops through all variables and generates text from the high and low value of each variable, controled by the `std_range` and `generate_interval` arguments. There are many configurations for the generating process that can be modifed (e.g., number of generated sentences, nucleous sampling parameters). Run `python3 ./inference_psychadapter.py -h` for more information.
 ```
 # Inferencing Big Five personalities PsychAdapter
 python ./codes/inference_psychadapter.py \
