@@ -7,7 +7,7 @@ python ./codes/inference_psychadapter.py \
 	--output_dir ./checkpoints/big5_model \
 	--model_name_or_path google/gemma-2b \
 	--checkpoint_step 30000 \
-    --psych_variables big5 \
+    	--psych_variables big5 \
 	--latent_size 5 \
 	--do_lower_case \
 	--generate_num 10 \
@@ -17,9 +17,8 @@ python ./codes/inference_psychadapter.py \
 	--top_p 0.9 \
 	--std_range 3.0 \
 	--generate_interval 3.0 \
-	--seed 45
-    ** adding prompt
-    --prompting_text "I like to"
+	--seed 45 \
+  	--prompting_text "I like to"
 
 # For variables: Depression
 python ./codes/inference_psychadapter.py \
@@ -27,7 +26,7 @@ python ./codes/inference_psychadapter.py \
 	--output_dir ./checkpoints/dep_model \
 	--model_name_or_path google/gemma-2b \
 	--checkpoint_step 30000 \
-    --psych_variables dep \
+    	--psych_variables dep \
 	--latent_size 1 \
 	--do_lower_case \
 	--generate_num 10 \
@@ -37,7 +36,8 @@ python ./codes/inference_psychadapter.py \
 	--top_p 0.9 \
 	--std_range 3.0 \
 	--generate_interval 3.0 \
-	--seed 45
+	--seed 45 \
+  	--prompting_text ""
 
 # For variables: Life-satisfaction
 python ./codes/inference_psychadapter.py \
@@ -45,7 +45,7 @@ python ./codes/inference_psychadapter.py \
 	--output_dir ./checkpoints/swl_model \
 	--model_name_or_path google/gemma-2b \
 	--checkpoint_step 30000 \
-    --psych_variables swl \
+    	--psych_variables swl \
 	--latent_size 1 \
 	--do_lower_case \
 	--generate_num 10 \
@@ -55,4 +55,5 @@ python ./codes/inference_psychadapter.py \
 	--top_p 0.9 \
 	--std_range 3.0 \
 	--generate_interval 3.0 \
-	--seed 45
+	--seed 45 \
+  	--prompting_text ""
