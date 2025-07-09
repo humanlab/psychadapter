@@ -1,5 +1,5 @@
 # PsychAdapter: Adapting LLM Transformers to Reflect Traits, Personality and Mental Health
-This is the source code repository for the paper "Artificially Intelligent Language with Personality". This work is currently under submission.
+This is the source code repository for the paper "PsychAdapter: Adapting LLM Transformers to Reflect Traits, Personality and Mental Health". This work is currently under submission.
 
 This work proposes the architecture PsychAdapter - an transformer-based AI language model that is able to reflect individual characteristics in its text output. PsychAdapter is trained to be able to reflect any of the Big Five personality traits (openness, conscientiousness, extraversion, agreeableness, and neuroticism) as well as mental health variables (depression and life satisfaction), while optionally being conditioned on demographics (e.g., age). The live-demo of our model can be found at: http://3.12.111.1 (not for distributing until manuscript acceptance). 
 
