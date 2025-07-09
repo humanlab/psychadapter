@@ -5,13 +5,6 @@ This work proposes the architecture PsychAdapter - an transformer-based AI langu
 
 This project was done in collaboration between PhD students, postdocs, and professors from Stony Brook University (Huy Vu, Swanie Juhng, Adithya Ganesan, Oscar N.E. Kjell, H. Andrew Schwartz), Stanford University (Johannes C. Eichstaedt), New York University (Joao Sedoc), University of Melbourne (Margaret L. Kern), University of Pennsylvania (Lyle Ungar). Corresponding authors: Huy Vu (hvu@cs.stonybrook.edu), Johannes C. Eichstaedt (johannes.stanford@gmail.com), H. Andrew Schwartz (has@cs.stonybrook.edu).
 
-## Codebase overview
-Below are the descriptions of files and directories in the repository.
-* `./data`: training and validating files containing messages' text and their corresponding "estimated" construct scores (e.g. Big Five scores, depression, life-satisfaction scores)
-* `./src`: directory containing source codes for model architecture, model training and inferencing.
-* `./train_command.sh`: example command to run training model.
-* `./inference_command.sh`: example command to run inferencing model.
-
 ## Installations requirements
 Python: 3.10.0+.
 
