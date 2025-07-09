@@ -3,7 +3,7 @@ This is the source code repository for the paper "PsychAdapter: Adapting LLM Tra
 
 This work proposes the architecture PsychAdapter - an transformer-based AI language model that is able to reflect individual characteristics in its text output. PsychAdapter is trained to be able to reflect any of the Big Five personality traits (openness, conscientiousness, extraversion, agreeableness, and neuroticism) as well as mental health variables (depression and life satisfaction), while optionally being conditioned on demographics (e.g., age). The live-demo of our model can be found at: http://3.12.111.1 (not for distributing until manuscript acceptance). 
 
-This project was done in collaboration between PhD students, postdocs, and professors from Stony Brook University (Huy Vu, Swanie Juhng, Adithya Ganesan, Oscar N.E. Kjell, H. Andrew Schwartz), Stanford University (Johannes C. Eichstaedt), New York University (Joao Sedoc), University of Melbourne (Margaret L. Kern), University of Pennsylvania (Lyle Ungar). Corresponding authors: Huy Vu (hvu@cs.stonybrook.edu), Johannes C. Eichstaedt (johannes.stanford@gmail.com), H. Andrew Schwartz (has@cs.stonybrook.edu).
+This project was done in collaboration between PhD students, postdocs, and professors from Stony Brook University (Huy Vu, Swanie Juhng, Adithya Ganesan, Oscar N.E. Kjell, H. Andrew Schwartz), University of Texas at Dallas (Ryan L. Boyd), Stanford University (Johannes C. Eichstaedt), New York University (Joao Sedoc), University of Melbourne (Margaret L. Kern), University of Pennsylvania (Lyle Ungar). Corresponding authors: Huy Vu (hvu@cs.stonybrook.edu), Johannes C. Eichstaedt (johannes.stanford@gmail.com), H. Andrew Schwartz (has@cs.stonybrook.edu).
 
 ## Installations requirements
 Python: 3.10.0+.
