@@ -16,6 +16,10 @@ pip install peft=="0.10.0"
 
 ### Training
 We train PsychAdapter using the following command format. The LLM base models can be set through argument `--model_name_or_path`. Run `python3 ./train_psychadapter.py -h` for more information. The code reads the data from `./processed_data` directory then begins the training process. A directory `./trained_models` will be created containing the trained model.
+
+To obtain training and validating dataset (containing messages' text and their corresponding "estimated" construct scores, e.g. Big Five scores, depression, life-satisfaction scores) for research purpose, please contact Huy Vu at [hvu@cs.stonybrook.edu].
+
+
 ```
 # Training Big Five personalities PsychAdapter
 python ./codes/train_psychadapter.py \
