@@ -58,3 +58,19 @@ python ./codes/inference_psychadapter.py \
 	--seed 45 \
 	--prompting_text "I like to"
 ```
+
+## How to Cite
+
+If you use this code or model in your research, please cite our paper:
+
+```bibtex
+@misc{vu2025psychadapteradaptingllmtransformers,
+  title     = {PsychAdapter: Adapting LLM Transformers to Reflect Traits, Personality and Mental Health},
+  author    = {Huy Vu and Huy Anh Nguyen and Adithya V Ganesan and Swanie Juhng and Oscar N. E. Kjell and Joao Sedoc and Margaret L. Kern and Ryan L. Boyd and Lyle Ungar and H. Andrew Schwartz and Johannes C. Eichstaedt},
+  year      = {2025},
+  eprint    = {2412.16882},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.AI},
+  url       = {https://arxiv.org/abs/2412.16882}
+}
+
