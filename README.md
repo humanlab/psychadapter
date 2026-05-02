@@ -1,9 +1,14 @@
 # PsychAdapter: Adapting LLM Transformers to Reflect Traits, Personality and Mental Health
-This is the source code repository for the paper "PsychAdapter: Adapting LLM Transformers to Reflect Traits, Personality and Mental Health". This work is currently under submission.
+This is the source code repository for the paper "PsychAdapter: Adapting LLM Transformers to Reflect Traits, Personality and Mental Health". 
 
-This work proposes the architecture PsychAdapter - an transformer-based AI language model that is able to reflect individual characteristics in its text output. PsychAdapter is trained to be able to reflect any of the Big Five personality traits (openness, conscientiousness, extraversion, agreeableness, and neuroticism) as well as mental health variables (depression and life satisfaction), while optionally being conditioned on demographics (e.g., age). The live-demo of our model can be found at: http://3.12.111.1 (not for distributing until manuscript acceptance). 
+This work proposes the architecture PsychAdapter - an transformer-based AI language model that is able to reflect individual characteristics in its text output. PsychAdapter is trained to be able to reflect any of the Big Five personality traits (openness, conscientiousness, extraversion, agreeableness, and neuroticism) as well as mental health variables (depression and life satisfaction), while optionally being conditioned on demographics (e.g., age).
 
 This project was done in collaboration between PhD students, postdocs, and professors from Stony Brook University (Huy Vu, Swanie Juhng, Adithya Ganesan, Oscar N.E. Kjell, H. Andrew Schwartz), University of Texas at Dallas (Ryan L. Boyd), Stanford University (Johannes C. Eichstaedt), New York University (Joao Sedoc), University of Melbourne (Margaret L. Kern), University of Pennsylvania (Lyle Ungar). Corresponding authors: Huy Vu (hvu@cs.stonybrook.edu), Johannes C. Eichstaedt (johannes.stanford@gmail.com), H. Andrew Schwartz (has@cs.stonybrook.edu).
+
+## HuggingFace Resources 
+The model checkpoints and the full dataset are available on HuggingFace: 
+* Model Checkpoints: https://huggingface.co/huvucode/PsychAdapter
+* Dataset: https://huggingface.co/datasets/huvucode/PsychAdapter 
 
 ## Installations requirements
 Python: 3.10.0+.
@@ -68,13 +73,16 @@ python ./codes/inference_psychadapter.py \
 If you use this code or model in your research, please cite our paper:
 
 ```bibtex
-@misc{vu2025psychadapteradaptingllmtransformers,
-  title     = {PsychAdapter: Adapting LLM Transformers to Reflect Traits, Personality and Mental Health},
-  author    = {Huy Vu and Huy Anh Nguyen and Adithya V Ganesan and Swanie Juhng and Oscar N. E. Kjell and Joao Sedoc and Margaret L. Kern and Ryan L. Boyd and Lyle Ungar and H. Andrew Schwartz and Johannes C. Eichstaedt},
-  year      = {2025},
-  eprint    = {2412.16882},
-  archivePrefix = {arXiv},
-  primaryClass  = {cs.AI},
-  url       = {https://arxiv.org/abs/2412.16882}
+@article{vu2026psychadapter,
+  title={PsychAdapter: Adapting LLM Transformers to Reflect Traits, Personality and Mental Health},
+  author={Vu, Huy and Nguyen, Huy Anh and Ganesan, Adithya V. and Juhng, Swanie and Kjell, Oscar N. E. and Sedoc, Joao and Kern, Margaret L. and Boyd, Ryan L. and Ungar, Lyle and Schwartz, H. Andrew and Eichstaedt, Johannes C.},
+  journal={npj Artificial Intelligence},
+  volume={2},
+  number={7},
+  year={2026},
+  publisher={Nature Publishing Group},
+  doi={10.1038/s44387-026-00071-9},
+  url={https://www.nature.com/articles/s44387-026-00071-9}
 }
+```
 
