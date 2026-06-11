@@ -17,8 +17,14 @@ class PsychAdapter(nn.Module):
         super(PsychAdapter, self).__init__()
 
         # set up transformation matrix and decoder
+        self.model_name = model_name_or_path
         self.model_config = AutoConfig.from_pretrained(model_name_or_path, cache_dir = None)
-        self.transform_matrix = nn.Linear(latent_size, self.model_config.num_hidden_layers * 2 * self.model_config.num_key_value_heads * self.model_config.head_dim)
+        if "gemma" in model_name_or_path:
+            self.transform_matrix = nn.Linear(latent_size, self.model_config.num_hidden_layers * 2 * self.model_config.num_key_value_heads * self.model_config.head_dim)
+        elif "gpt2" in model_name_or_path:
+            self.model_config.num_key_value_heads = self.model_config.num_attention_heads
+            self.model_config.head_dim = self.model_config.hidden_size // self.model_config.num_attention_heads
+            self.transform_matrix = nn.Linear(latent_size, self.model_config.num_hidden_layers * 2 * self.model_config.num_key_value_heads * self.model_config.head_dim)
         self.tokenizer = None
         self.decoder = None
 
@@ -31,17 +37,22 @@ class PsychAdapter(nn.Module):
     def initialize_model(self, args):
 
         # load pretrained model and tokenizer for the encoder and decoder
-        decoder_path = args.model_name_or_path   
+        decoder_path = args.model_name_or_path
         tokenizer_path = args.model_name_or_path
         self.decoder = AutoModelForCausalLM.from_pretrained(decoder_path, from_tf=bool('.ckpt' in decoder_path), config=self.model_config)
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, do_lower_case=args.do_lower_case, add_prefix_space=True)
 
-        # special tokens from tokenizer
+        # special tokens from tokenizer, based on used model
         # <bos><eos><pad>
-        bos_token_id = self.model_config.bos_token_id
-        eos_token_id = self.model_config.eos_token_id
-        pad_token_id = self.model_config.pad_token_id
+        if "gemma" in self.model_name:
+           self.pad_token = self.tokenizer.pad_token
 
+        elif "gpt2" in self.model_name:
+            self.pad_token = self.tokenizer.eos_token
+
+        self.pad_token_id = self.tokenizer.convert_tokens_to_ids(self.pad_token)
+        self.bos_token_id = self.tokenizer.bos_token_id
+        self.eos_token_id = self.tokenizer.eos_token_id
 
     def forward(self, embeddings, decoder_input_ids, decoder_attention_mask, device):
 
@@ -79,9 +90,11 @@ class PsychAdapter(nn.Module):
 
         # decoder
         if prompting_text is None:
-            decoder_input_ids = torch.tensor([self.tokenizer.convert_tokens_to_ids("<bos>")]*batch_size, device = device).long().reshape(batch_size,1)
+            # decoder_input_ids = torch.tensor([self.tokenizer.convert_tokens_to_ids("<bos>")]*batch_size, device = device).long().reshape(batch_size,1)
+            decoder_input_ids = torch.tensor([self.tokenizer.bos_token_id]*batch_size, device = device).long().reshape(batch_size,1)
         else:
-            prompting_text_tokens = "<bos>" + prompting_text.strip()
+            # prompting_text_tokens = "<bos>" + prompting_text.strip()
+            prompting_text_tokens = self.tokenizer.bos_token + prompting_text.strip()
             prompting_text_encoded = self.tokenizer.encode(prompting_text_tokens, add_special_tokens = False)
             decoder_input_ids = torch.tensor(prompting_text_encoded*batch_size, device = device).long().reshape(batch_size,len(prompting_text_encoded))
         past = transformed_embeddings
@@ -103,9 +116,9 @@ class PsychAdapter(nn.Module):
             if args.temperature == 0: # greedy sampling:
                 next_token = torch.argmax(filtered_decoder_lm_logits, dim=-1).unsqueeze(-1)
             else:
-                next_token = torch.multinomial(F.softmax(filtered_decoder_lm_logits/args.temperature, dim=-1), num_samples=1)                
+                next_token = torch.multinomial(F.softmax(filtered_decoder_lm_logits/args.temperature, dim=-1), num_samples=1)
             generated = torch.cat((generated, next_token), dim=1)
-    
+
         return generated, decoder_attentions
 
 
@@ -116,17 +129,17 @@ class PsychAdapter(nn.Module):
         output_dir_tokenizer = output_dir + "/tokenizer/"
         output_dir_transform_matrix = output_dir + "/transform_matrix/"
         if not os.path.exists(output_dir_decoder):
-            os.makedirs(output_dir_decoder)            
+            os.makedirs(output_dir_decoder)
         if not os.path.exists(output_dir_tokenizer):
             os.makedirs(output_dir_tokenizer)
         if not os.path.exists(output_dir_transform_matrix):
             os.makedirs(output_dir_transform_matrix)
-        output_dir_transform_matrix = output_dir_transform_matrix + "/transform_matrix.weights"    
+        output_dir_transform_matrix = output_dir_transform_matrix + "/transform_matrix.weights"
 
         # save model
         self.decoder.save_pretrained(output_dir_decoder)
         self.tokenizer.save_pretrained(output_dir_tokenizer)
-        torch.save(self.transform_matrix.state_dict(),output_dir_transform_matrix)    
+        torch.save(self.transform_matrix.state_dict(),output_dir_transform_matrix)
 
         return
 
@@ -138,12 +151,12 @@ class PsychAdapter(nn.Module):
         logger.info("Saving model checkpoint to %s", output_dir)
         loss_reports_file = open(output_dir + "/loss_reports.pkl", "wb")
         pickle.dump(loss_reports, loss_reports_file)
-        
+
         return
 
 
     def from_checkpoint(self, args, output_dir):
-        
+
         model_dir = output_dir
 
         # loading from pre-trained
@@ -165,7 +178,7 @@ class PsychAdapter(nn.Module):
         # load training args
         training_args = torch.load(os.path.join(model_dir, 'training_args.bin'))
 
-        return 
+        return
 
 # ===================== other methods ===================== #
 def top_k_top_p_filtering(logits, top_k=0, top_p=0.0, filter_value=-float('Inf')):

@@ -23,20 +23,22 @@ from psychadapter import PsychAdapter
 
 logger = logging.getLogger(__name__)
 
+MAX_LEN_SENTENCE = 8192 # 8192
+
 """====================== METHODS DEFINITIONS ======================"""
 
-def truncating_padding_sentence(tokens, block_size):
+def truncating_padding_sentence(tokens, block_size, pad_token="<pad>"):
     if (len(tokens) > block_size):
         original_tokens_len = block_size
         tokens = tokens[:block_size]
     else:
         original_tokens_len = len(tokens)
-        tokens = tokens + ["<pad>"]*(block_size - len(tokens))
-    return tokens, original_tokens_len    
+        tokens = tokens + [pad_token]*(block_size - len(tokens))
+    return tokens, original_tokens_len
 
 class TextDataset(Dataset):
-    def __init__(self, tokenizer, file_path, args):
-        
+    def __init__(self, tokenizer, file_path, args, pad_token):
+
         # reading data file
         assert os.path.isfile(file_path)
         directory, filename = os.path.split(file_path)
@@ -47,14 +49,14 @@ class TextDataset(Dataset):
             with open(cached_features_file, 'rb') as handle:
                 self.examples = pickle.load(handle)
         else:
-            logger.info("Creating features from dataset file at %s", directory)       
-                
-            
+            logger.info("Creating features from dataset file at %s", directory)
+
             # reading file
             self.examples = []
 
             data_df = pd.read_csv(file_path, header = 0, index_col = False)
-            for i, record in data_df.iterrows(): 
+
+            for i, record in tqdm(data_df.iterrows(), total=len(data_df)):
 
                 # read data
                 sentence_text = str(record["message"])
@@ -65,12 +67,12 @@ class TextDataset(Dataset):
 
                 # decoder_input
                 decoder_input = [tokenizer.bos_token] + sentence_tokenized
-                decoder_input, _ = truncating_padding_sentence(decoder_input, args.block_size)
+                decoder_input, _ = truncating_padding_sentence(decoder_input, args.block_size, pad_token)
                 decoder_input = tokenizer.convert_tokens_to_ids(decoder_input)
                 decoder_input = np.array(decoder_input)
                 # decoder_output
                 decoder_label = sentence_tokenized + [tokenizer.eos_token]
-                decoder_label, _ = truncating_padding_sentence(decoder_label, args.block_size)
+                decoder_label, _ = truncating_padding_sentence(decoder_label, args.block_size, pad_token)
                 decoder_label = tokenizer.convert_tokens_to_ids(decoder_label)
                 decoder_label = np.array(decoder_label)
 
@@ -78,8 +80,17 @@ class TextDataset(Dataset):
                 decoder_attention_mask = 0
 
                 # append to examples list
-                training_sentence = dict({"sentence_embedding": sentence_embedding, "sentence_text": sentence_text, "decoder_input": decoder_input, "decoder_attention_mask": decoder_attention_mask, "decoder_label": decoder_label})  
+                training_sentence = {
+                                    "sentence_embedding": sentence_embedding,
+                                    "sentence_text": sentence_text,
+                                    "decoder_input": decoder_input,
+                                    "decoder_attention_mask": decoder_attention_mask,
+                                    "decoder_label": decoder_label
+                                    }
+
                 self.examples.append(training_sentence)
+
+                if i == 1000: break # DEBUG
 
             logger.info("Saving features into cached file %s", cached_features_file)
             with open(cached_features_file, 'wb') as handle:
@@ -90,8 +101,8 @@ class TextDataset(Dataset):
         for i in range(2):
             example = self.examples[i]
             logger.info("decoder_input: " + str(example["decoder_input"]))
-            logger.info("decoder_label: " + str(example["decoder_label"]))           
-            logger.info("decoder_input: " + str(tokenizer.decode(example["decoder_input"].tolist(), clean_up_tokenization_spaces=True))) 
+            logger.info("decoder_label: " + str(example["decoder_label"]))
+            logger.info("decoder_input: " + str(tokenizer.decode(example["decoder_input"].tolist(), clean_up_tokenization_spaces=True)))
             logger.info("decoder_label: " + str(tokenizer.decode(example["decoder_label"].tolist(), clean_up_tokenization_spaces=True)))
             logger.info("\n")
 
@@ -100,10 +111,10 @@ class TextDataset(Dataset):
 
     def __getitem__(self, item):
         return self.examples[item]
-    
-def load_and_cache_examples(args, file_path, tokenizer):
-    dataset = TextDataset(tokenizer, file_path=file_path, args=args)
-    return dataset    
+
+def load_and_cache_examples(args, file_path, tokenizer, pad_token):
+    dataset = TextDataset(tokenizer, file_path=file_path, args=args, pad_token=pad_token)
+    return dataset
 
 def set_seed(args):
     random.seed(args.seed)
@@ -113,16 +124,16 @@ def set_seed(args):
         torch.cuda.manual_seed_all(args.seed)
 
 def loss_fn(decoder_lm_logits, target, ignore_index):
-    
+
     # negative Log Likelihood
     loss_fct = torch.nn.CrossEntropyLoss(reduction='mean', ignore_index=ignore_index) # this 'mean' is taking average across all predicted tokens: sum(crossentropyloss_each_position)/(batch_size * seq_length)
     # transform decoder_lm_logits from [batch_size, seq_length, vocab_size] => [batch_size * seq_length, vocab_size], target from [batch_size, sweq_length] => [batch_size * sweq_length]
-    NLL_loss = loss_fct(decoder_lm_logits.view(-1, decoder_lm_logits.size(-1)), target.contiguous().view(-1))  
+    NLL_loss = loss_fct(decoder_lm_logits.view(-1, decoder_lm_logits.size(-1)), target.contiguous().view(-1))
 
     return NLL_loss
 
 def loss_perplexity_fn(decoder_lm_logits, target, ignore_index):
-    
+
     # negative Log Likelihood
     loss_fct = torch.nn.CrossEntropyLoss(reduction='mean', ignore_index=ignore_index) # this 'mean' is taking average across all predicted tokens: sum(crossentropyloss_each_position)/(batch_size * seq_length)
 
@@ -133,7 +144,7 @@ def loss_perplexity_fn(decoder_lm_logits, target, ignore_index):
         perplexity_onesample = torch.exp(NLL_loss_onesample)
         NLL_loss_batch.append(NLL_loss_onesample)
         perplexity_batch.append(perplexity_onesample)
-    return NLL_loss_batch, perplexity_batch    
+    return NLL_loss_batch, perplexity_batch
 
 def save_checkpoint(model, args, loss_reports, global_step):
     # save peft checkpoints
@@ -156,7 +167,7 @@ def train(args, train_dataset, eval_dataset, model, tokenizer):
 
     # summary writer
     tb_writer = SummaryWriter()
-    
+
     # # DEBUGGING
     # logger.info("train_dataset: " + str(len(train_dataset)))
     # logger.info(train_dataset[0])
@@ -175,14 +186,14 @@ def train(args, train_dataset, eval_dataset, model, tokenizer):
     # prepare optimizer and schedule (linear warmup and decay)
     no_decay = ['bias', 'LayerNorm.weight']
     optimizer_grouped_parameters = [
-        {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)], 'weight_decay': args.weight_decay},  
+        {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)], 'weight_decay': args.weight_decay},
         {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
         ]
 
     # set optimizer and scheduler
     global_step = 0
-    optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=args.learning_rate)
-    scheduler = get_scheduler(name="linear", optimizer = optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total)    
+    optimizer = torch.optim.AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
+    scheduler = get_scheduler(name="linear", optimizer = optimizer, num_warmup_steps=args.warmup_steps, num_training_steps=t_total)
 
 
     # run training
@@ -206,15 +217,17 @@ def train(args, train_dataset, eval_dataset, model, tokenizer):
     eval_loss_report = []
     eval_perplexity_loss_report = []
     eval_current_step = []
+    pad_token_id = model.module.pad_token_id
+
     for _ in train_iterator:
         epoch_iterator = tqdm(train_dataloader, desc="Iteration", disable=False)
         for step, batch in enumerate(epoch_iterator):
- 
-            sentence_embedding = batch["sentence_embedding"].float()
-            decoder_input = batch["decoder_input"].long() 
-            decoder_label = batch["decoder_label"].long()        
 
-            # create decoder_attention_mask here instead of in the loop to save running time, the len is (decoder_input.shape[1] + 1), with 1 is for the past token 
+            sentence_embedding = batch["sentence_embedding"].float()
+            decoder_input = batch["decoder_input"].long()
+            decoder_label = batch["decoder_label"].long()
+
+            # create decoder_attention_mask here instead of in the loop to save running time, the len is (decoder_input.shape[1] + 1), with 1 is for the past token
             decoder_attention_mask = torch.tensor([[1]*(decoder_input.shape[1] + 1)]*decoder_input.shape[0], device = args.device)
 
             sentence_embedding = sentence_embedding.to(args.device)
@@ -227,8 +240,8 @@ def train(args, train_dataset, eval_dataset, model, tokenizer):
             decoder_lm_logits = model(sentence_embedding, decoder_input, decoder_attention_mask, args.device)
 
 
-            # compute loss 
-            NLL_loss = loss_fn(decoder_lm_logits, decoder_label, tokenizer.convert_tokens_to_ids(["<pad>"])[0]) 
+            # compute loss
+            NLL_loss = loss_fn(decoder_lm_logits, decoder_label, pad_token_id)
             loss = NLL_loss
 
 
@@ -254,7 +267,7 @@ def train(args, train_dataset, eval_dataset, model, tokenizer):
                 global_step += 1
 
 
-                # Logging 
+                # Logging
                 if args.logging_steps > 0 and global_step % args.logging_steps == 0:
                     # Log metrics
                     tb_writer.add_scalar('lr', scheduler.get_last_lr()[0], global_step)
@@ -262,8 +275,8 @@ def train(args, train_dataset, eval_dataset, model, tokenizer):
                     tb_writer.add_scalar('loss', averaged_loss, global_step)
                     logging_loss = tr_loss
                     logger.info("Current training step: " + str(global_step))
-                    logger.info("Average current training loss of the latest {} steps: {}".format(str(args.logging_steps), str(averaged_loss)))  
-                    
+                    logger.info("Average current training loss of the latest {} steps: {}".format(str(args.logging_steps), str(averaged_loss)))
+
 
                 # Save checkpoints
                 if args.save_steps > 0 and global_step % args.save_steps == 0:
@@ -283,20 +296,27 @@ def train(args, train_dataset, eval_dataset, model, tokenizer):
                         model.train()
 
                     # Save model (base model, peft checkpoints, loggings)
-                    loss_reports = {"loss_report":loss_report, "eval_loss_report":eval_loss_report, "eval_perplexity_loss_report":eval_perplexity_loss_report, "eval_current_step":eval_current_step}
+                    loss_reports = {"loss_report":loss_report,
+                                    "eval_loss_report":eval_loss_report, "eval_perplexity_loss_report":eval_perplexity_loss_report, "eval_current_step":eval_current_step
+                                    }
+
                     save_checkpoint(model, args, loss_reports, global_step)
 
 
             if args.max_steps > 0 and global_step > args.max_steps:
                 epoch_iterator.close()
                 break
-        
+
         if args.max_steps > 0 and global_step > args.max_steps:
             train_iterator.close()
             break
 
     # save final loss_reports
-    loss_reports = {"loss_report":loss_report, "eval_loss_report":eval_loss_report, "eval_perplexity_loss_report":eval_perplexity_loss_report, "eval_current_step":eval_current_step}
+    loss_reports = {"loss_report":loss_report,
+                    "eval_loss_report":eval_loss_report,
+                    "eval_perplexity_loss_report":eval_perplexity_loss_report,
+                    "eval_current_step":eval_current_step
+                    }
 
     # close summary writer
     tb_writer.close()
@@ -320,14 +340,16 @@ def evaluate(args, eval_dataset, model, tokenizer):
 
     loss_report = []
     perplexity_report = []
+    pad_token_id = model.module.pad_token_id
+
     for step, batch in enumerate(tqdm(eval_dataloader, desc="Iteration", disable=False)):
 
         # extract input/output
         sentence_embedding = batch["sentence_embedding"].float()
-        decoder_input = batch["decoder_input"].long() 
-        decoder_label = batch["decoder_label"].long()        
+        decoder_input = batch["decoder_input"].long()
+        decoder_label = batch["decoder_label"].long()
 
-        # create decoder_attention_mask here instead of in the loop to save running time, the len is (decoder_input.shape[1] + 1), with 1 is for the past token 
+        # create decoder_attention_mask here instead of in the loop to save running time, the len is (decoder_input.shape[1] + 1), with 1 is for the past token
         decoder_attention_mask = torch.tensor([[1]*(decoder_input.shape[1] + 1)]*decoder_input.shape[0], device = args.device)
 
         # push to GPUs
@@ -339,14 +361,11 @@ def evaluate(args, eval_dataset, model, tokenizer):
         with torch.no_grad():
             model.eval()
 
-
             # forward pass (change and edit with VAE code)
             decoder_lm_logits = model(sentence_embedding, decoder_input, decoder_attention_mask, args.device)
 
-
-            # compute loss  
-            loss, perplexity = loss_perplexity_fn(decoder_lm_logits, decoder_label, tokenizer.convert_tokens_to_ids(["<pad>"])[0])    
-
+            # compute loss
+            loss, perplexity = loss_perplexity_fn(decoder_lm_logits, decoder_label, model.pad_token_id)
 
             # process loss across GPUs, batches then backwards
             if args.n_gpu > 1:
@@ -355,7 +374,6 @@ def evaluate(args, eval_dataset, model, tokenizer):
             elif args.n_gpu == 1:
                 loss = torch.tensor(loss)
                 perplexity = torch.tensor(perplexity)
-
 
             loss_report.extend(loss.data.cpu().numpy())
             perplexity_report.extend(perplexity.data.cpu().numpy())
@@ -376,7 +394,7 @@ def evaluate(args, eval_dataset, model, tokenizer):
 
 # main function
 def main():
-    
+
     # =========== parameters parsing =========== #
     parser = argparse.ArgumentParser()
 
@@ -392,26 +410,26 @@ def main():
     parser.add_argument("--eval_data_file", default=None, type=str,
                         help="An optional input evaluation data file to evaluate the perplexity on (a text file).")
     parser.add_argument("--start_step", type=int,
-                        help="The checkpoint number.")    
+                        help="The checkpoint number.")
     parser.add_argument('--overwrite_output_dir', action='store_true',
                         help="Overwrite the content of the output directory")
     parser.add_argument('--overwrite_cache', action='store_true',
                         help="Overwrite the cached training and evaluation sets")
-    
+
     # base model arguments
     parser.add_argument("--model_name_or_path", default="bert-base-cased", type=str,
                         help="The model checkpoint for weights initialization.")
     parser.add_argument("--latent_size", default=-1, type=int, required=True,
                         help="Size of latent VAE layer.")
     parser.add_argument("--do_lower_case", action='store_true',
-                        help="Set this flag if you are using an uncased model.") 
+                        help="Set this flag if you are using an uncased model.")
 
     # training arguments
     parser.add_argument("--block_size", default=-1, type=int,
-                        help="Optional input sequence length after tokenization. The training dataset will be truncated in block of this size for training. Default to the model max input length for single sentence inputs (take into account special tokens).")          
-    parser.add_argument("--frozen_layers", type=str, default='None', 
+                        help="Optional input sequence length after tokenization. The training dataset will be truncated in block of this size for training. Default to the model max input length for single sentence inputs (take into account special tokens).")
+    parser.add_argument("--frozen_layers", type=str, default=None,
                         help="Layers to be frozen while training.")
-   
+
     # other arguments
     parser.add_argument("--per_gpu_train_batch_size", default=4, type=int,
                         help="Batch size per GPU/CPU for training.")
@@ -446,17 +464,17 @@ def main():
     parser.add_argument('--seed', type=int, default=42,
                         help="random seed for initialization")
 
-    
+
     # parsing parameters
     args = parser.parse_args()
-    
-    
+
+
     # =========== checking parameters and setting up  =========== #
     # checking parameters validity
     if args.do_train:
         if os.path.exists(args.output_dir) and os.listdir(args.output_dir) and args.do_train and not args.overwrite_output_dir:
             raise ValueError("Output directory ({}) already exists and is not empty. Use --overwrite_output_dir to overcome.".format(args.output_dir))
-    
+
     # setup CUDA, GPU & distributed training
     device = torch.device("cuda" if torch.cuda.is_available() and not args.no_cuda else "cpu")    # CHECK! make sure we use all 3 GPUs
     args.n_gpu = torch.cuda.device_count()
@@ -477,7 +495,7 @@ def main():
     # initialize / load from checkpoint model
     if args.do_train:
         # initialize model with pretrained decoder model and randomly initialized transformation_matrix
-        model.initialize_model(args)    
+        model.initialize_model(args)
 
         # save base model
         output_dir_basemodel = os.path.join(args.output_dir, 'base_model')
@@ -486,11 +504,11 @@ def main():
         model.save_basemodel(args, output_dir_basemodel) # save decoder and transformation_matrix
 
     if args.block_size <= 0:  # modify args.block_size variable
-        args.block_size = model.tokenizer.max_len_single_sentence  # Our input block size will be the max possible for the model
-    args.block_size = min(args.block_size, model.tokenizer.max_len_single_sentence)
+        args.block_size = min(model.tokenizer.max_len_single_sentence, MAX_LEN_SENTENCE)  # Our input block size will be the max possible for the model
+    args.block_size = min(args.block_size, model.tokenizer.max_len_single_sentence - 1)
 
     # report model's architecture and size
-    pytorch_total_params = sum(p.numel() for p in model.parameters()) 
+    pytorch_total_params = sum(p.numel() for p in model.parameters())
     logger.info("Model architecture: ")
     logger.info(model)
     logger.info("Number of parameters of transform_matrix: " + str(sum(p.numel() for p in model.transform_matrix.parameters()) ))
@@ -505,16 +523,15 @@ def main():
     model = get_peft_model(model, peft_config)
     logger.info("PEFT trainable parameters: ")
     model.print_trainable_parameters()
-    
+
     # send model to GPU
     model.to(args.device)
 
     # set up data parallel
-    model = torch.nn.DataParallel(model) 
+    model = torch.nn.DataParallel(model)
 
     # training
     if args.do_train:
-            
         # freeze layers if appllicable
         if args.frozen_layers is not None:
             frozen_layers = args.frozen_layers.split(" ")
@@ -522,13 +539,13 @@ def main():
                 if any(".{}.".format(str(frozen_layer)) in name for frozen_layer in frozen_layers):
                     logger.info("frozen params: " + name)
                     param.requires_grad = False
-            
-            
+
+
         # load training dataset
         args.model_config = model.module.model_config
-        train_dataset = load_and_cache_examples(args, args.train_data_file, model.module.tokenizer)
+        train_dataset = load_and_cache_examples(args, args.train_data_file, model.module.tokenizer, model.module.pad_token)
         if args.evaluate_during_training:
-            eval_dataset = load_and_cache_examples(args, args.eval_data_file, model.module.tokenizer)
+            eval_dataset = load_and_cache_examples(args, args.eval_data_file, model.module.tokenizer, model.module.pad_token)
         else:
             eval_dataset = None
 
@@ -539,10 +556,10 @@ def main():
         train(args, train_dataset, eval_dataset, model, model.module.tokenizer)
 
         # good practice: save your training arguments together with the trained model
-        torch.save(args, os.path.join(args.output_dir, 'training_args.bin'))        
+        torch.save(args, os.path.join(args.output_dir, 'training_args.bin'))
 
 if __name__ == "__main__":
-    main()        
+    main()
 
 
 

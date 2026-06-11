@@ -2,9 +2,9 @@
 # pip install peft=="0.10.0"
 
 # For variables: big5 personalities
-python ./codes/train_psychadapter.py \
-	--train_data_file ./test_training_data/big5_training_data.csv \
-	--eval_data_file ./test_training_data/big5_validating_data.csv \
+python ./src/train_psychadapter.py \
+	--train_data_file ./data/big5_training_data.csv \
+	--eval_data_file ./data/big5_validating_data.csv \
 	--output_dir ./test_training_checkpoints/big5_model \
 	--model_name_or_path google/gemma-2b \
 	--latent_size 5 \
@@ -21,9 +21,9 @@ python ./codes/train_psychadapter.py \
 
 
 # For variables: Depression
-python ./codes/train_psychadapter.py \
-	--train_data_file ./test_training_data/dep_training_data.csv \
-	--eval_data_file ./test_training_data/dep_validating_data.csv \
+python ./src/train_psychadapter.py \
+	--train_data_file ./data/dep_training_data.csv \
+	--eval_data_file ./data/dep_validating_data.csv \
 	--output_dir ./test_training_checkpoints/dep_model \
 	--model_name_or_path google/gemma-2b \
 	--latent_size 1 \
@@ -39,9 +39,9 @@ python ./codes/train_psychadapter.py \
 
 
 # For variables: Depression
-python ./codes/train_psychadapter.py \
-	--train_data_file ./test_training_data/swl_training_data.csv \
-	--eval_data_file ./test_training_data/swl_validating_data.csv \
+python ./src/train_psychadapter.py \
+	--train_data_file ./data/swl_training_data.csv \
+	--eval_data_file ./data/swl_validating_data.csv \
 	--output_dir ./test_training_checkpoints/swl_model \
 	--model_name_or_path google/gemma-2b \
 	--latent_size 1 \
