@@ -16,7 +16,9 @@ git clone https://huggingface.co/datasets/huvucode/PsychAdapter data
 git clone https://huggingface.co/huvucode/PsychAdapter pretrained_checkpoints
 ```
 
-## Installations requirements
+Note: large files are stored with Git LFS. Install git-lfs before cloning.
+
+## Installation requirements
 ```
 conda create -n psychadapter python=3.11
 conda activate psychadapter
@@ -25,10 +27,19 @@ pip install transformers==4.39.2 peft==0.10.0 pandas==2.1.4
 pip install tensorboardX
 ```
 
+### HuggingFace authentication
+Some models (including Gemma) require a HuggingFace account and accepted license. Before running:
+
+1. Create an account and generate an access token at https://huggingface.co/settings/tokens
+2. Accept the Gemma license at https://huggingface.co/google/gemma-2b
+3. Authenticate locally: `huggingface-cli login`
+
 ## Instructions for training and generating text with PsychAdapter
 
 ### Training
 We train PsychAdapter using the following command format. The LLM base models can be set through argument `--model_name_or_path`. Run `python3 ./train_psychadapter.py -h` for more information. The code reads the data from `./processed_data` directory then begins the training process. A directory `./trained_models` will be created containing the trained model.
+
+Note: the first run will process and cache the dataset (~30 mins). Subsequent runs will load from cache and start training immediately.
 
 To obtain training and validating dataset (containing messages' text and their corresponding "estimated" construct scores, e.g. Big Five scores, depression, life-satisfaction scores) for research purpose, please contact Huy Vu at [hvu@cs.stonybrook.edu].
 

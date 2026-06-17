@@ -90,8 +90,6 @@ class TextDataset(Dataset):
 
                 self.examples.append(training_sentence)
 
-                if i == 1000: break # DEBUG
-
             logger.info("Saving features into cached file %s", cached_features_file)
             with open(cached_features_file, 'wb') as handle:
                 pickle.dump(self.examples, handle, protocol=pickle.HIGHEST_PROTOCOL)
@@ -365,7 +363,7 @@ def evaluate(args, eval_dataset, model, tokenizer):
             decoder_lm_logits = model(sentence_embedding, decoder_input, decoder_attention_mask, args.device)
 
             # compute loss
-            loss, perplexity = loss_perplexity_fn(decoder_lm_logits, decoder_label, model.pad_token_id)
+            loss, perplexity = loss_perplexity_fn(decoder_lm_logits, decoder_label, pad_token_id)
 
             # process loss across GPUs, batches then backwards
             if args.n_gpu > 1:
