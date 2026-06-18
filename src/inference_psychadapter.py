@@ -161,16 +161,22 @@ def main():
 
     # =========== bulilding model and inferencing  =========== #
     # building model
-    model = PsychAdapter(args.model_name_or_path, args.latent_size)
+    model = PsychAdapter(args.model_name_or_path, args.latent_size, is_inference=True)
 
     # load from checkpoint model
     output_dir_basemodel = os.path.join(args.output_dir, 'base_model')
     output_dir_currentstep = os.path.join(args.output_dir, 'checkpoint-{}'.format(args.checkpoint_step))
-    # load base model
+    # load base model (decoder + tokenizer + initial transform_matrix)
     model.from_checkpoint(args, output_dir_basemodel)
-    # load peft
-    peft_model_id = output_dir_currentstep
-    model = PeftModel.from_pretrained(model, peft_model_id)
+    # load peft (LoRA adapter on decoder only)
+    model.decoder = PeftModel.from_pretrained(model.decoder, output_dir_currentstep)
+    # override transform_matrix with trained weights from checkpoint
+    transform_matrix_path = os.path.join(output_dir_currentstep, 'transform_matrix', 'transform_matrix.weights')
+    if os.path.exists(transform_matrix_path):
+        model.transform_matrix.load_state_dict(torch.load(transform_matrix_path, map_location='cpu'))
+        logger.info("Loaded trained transform_matrix from %s", transform_matrix_path)
+    else:
+        logger.warning("No trained transform_matrix found at %s, using base_model weights", transform_matrix_path)
 
     # send model to GPU
     model.to(args.device)

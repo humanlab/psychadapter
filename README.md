@@ -22,9 +22,8 @@ Note: large files are stored with Git LFS. Install git-lfs before cloning.
 ```
 conda create -n psychadapter python=3.11
 conda activate psychadapter
-pip install torch==2.0.1+cu118 torchvision==0.15.2+cu118 torchaudio==2.0.2+cu118 --index-url https://download.pytorch.org/whl/cu118
-pip install transformers==4.39.2 peft==0.10.0 pandas==2.1.4
-pip install tensorboardX
+pip install torch==2.11.0 --index-url https://download.pytorch.org/whl/cu128
+pip install transformers peft accelerate pandas tensorboardX
 ```
 
 ### HuggingFace authentication

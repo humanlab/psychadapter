@@ -1,7 +1,7 @@
 # import libraries
 import torch
 import torch.nn as nn
-from transformers import AutoConfig, AutoTokenizer, AutoModelForCausalLM
+from transformers import AutoConfig, AutoTokenizer, AutoModelForCausalLM, DynamicCache
 import logging
 import torch.nn.functional as F
 import os
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 class PsychAdapter(nn.Module):
 
-    def __init__(self, model_name_or_path, latent_size):
+    def __init__(self, model_name_or_path, latent_size, is_inference=False):
         super(PsychAdapter, self).__init__()
 
         # set up transformation matrix and decoder
@@ -29,9 +29,9 @@ class PsychAdapter(nn.Module):
         self.decoder = None
 
         # set up model_config
-        self.model_config.output_hidden_states = True
-        self.model_config.use_cache = True
-        self.model_config.output_attentions = True
+        self.model_config.output_hidden_states = is_inference
+        self.model_config.use_cache = is_inference
+        self.model_config.output_attentions = is_inference
 
 
     def initialize_model(self, args):
@@ -67,12 +67,16 @@ class PsychAdapter(nn.Module):
         transformed_embeddings = torch.transpose(transformed_embeddings,1,2).contiguous()
 
         # decoder
-        past = transformed_embeddings
+        target_dtype = next(self.decoder.parameters()).dtype
+        transformed_embeddings = transformed_embeddings.to(target_dtype)
+        past = DynamicCache()
+        for i in range(self.model_config.num_hidden_layers):
+            past.update(transformed_embeddings[i, 0], transformed_embeddings[i, 1], i)
 
         # decoder forward pass
-        decoder_lm_logits, decoder_presents, decoder_hidden_states, decoder_attentions = self.decoder(input_ids = decoder_input_ids, past_key_values = past, attention_mask = decoder_attention_mask, return_dict=False)
+        outputs = self.decoder(input_ids=decoder_input_ids, past_key_values=past, attention_mask=decoder_attention_mask, return_dict=True)
 
-        return decoder_lm_logits
+        return outputs.logits
 
 
     def inference(self, prompting_text = None, sentence_embedding = None, args = None, device = None):
@@ -97,11 +101,18 @@ class PsychAdapter(nn.Module):
             prompting_text_tokens = self.tokenizer.bos_token + prompting_text.strip()
             prompting_text_encoded = self.tokenizer.encode(prompting_text_tokens, add_special_tokens = False)
             decoder_input_ids = torch.tensor(prompting_text_encoded*batch_size, device = device).long().reshape(batch_size,len(prompting_text_encoded))
-        past = transformed_embeddings
+        target_dtype = next(self.decoder.parameters()).dtype
+        transformed_embeddings = transformed_embeddings.to(target_dtype)
 
         # generate tokens
         generated = decoder_input_ids
         for _ in range(args.generate_length):
+
+            # rebuild cache each step — DynamicCache is mutated in-place during forward,
+            # so we must start fresh to keep psychological conditioning fixed
+            past = DynamicCache()
+            for i in range(self.model_config.num_hidden_layers):
+                past.update(transformed_embeddings[i, 0], transformed_embeddings[i, 1], i)
 
             # compute attention mask
             decoder_attention_mask = torch.tensor([[1]*(generated.shape[1] + 1)]*generated.shape[0], device = device)
@@ -124,22 +135,16 @@ class PsychAdapter(nn.Module):
 
     def save_basemodel(self, args, output_dir):
 
-        # set up output_dir to save sub-models
-        output_dir_decoder = output_dir + "/decoder/"
         output_dir_tokenizer = output_dir + "/tokenizer/"
         output_dir_transform_matrix = output_dir + "/transform_matrix/"
-        if not os.path.exists(output_dir_decoder):
-            os.makedirs(output_dir_decoder)
         if not os.path.exists(output_dir_tokenizer):
             os.makedirs(output_dir_tokenizer)
         if not os.path.exists(output_dir_transform_matrix):
             os.makedirs(output_dir_transform_matrix)
         output_dir_transform_matrix = output_dir_transform_matrix + "/transform_matrix.weights"
 
-        # save model
-        self.decoder.save_pretrained(output_dir_decoder)
         self.tokenizer.save_pretrained(output_dir_tokenizer)
-        torch.save(self.transform_matrix.state_dict(),output_dir_transform_matrix)
+        torch.save(self.transform_matrix.state_dict(), output_dir_transform_matrix)
 
         return
 
@@ -164,6 +169,13 @@ class PsychAdapter(nn.Module):
         tokenizer_path = model_dir + "/tokenizer/"
         transform_matrix_path = model_dir + "/transform_matrix/transform_matrix.weights"
         logger.info("model_config: " + str(self.model_config))
+        # fall back to HuggingFace if local decoder has no saved weights
+        has_local_weights = any(
+            os.path.exists(os.path.join(decoder_path, f))
+            for f in ("model.safetensors", "pytorch_model.bin", "model.safetensors.index.json")
+        )
+        if not has_local_weights:
+            decoder_path = args.model_name_or_path
         self.decoder = AutoModelForCausalLM.from_pretrained(decoder_path, from_tf=bool('.ckpt' in decoder_path), config=self.model_config, ignore_mismatched_sizes = False)
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path, do_lower_case=args.do_lower_case)
         if torch.cuda.is_available():
@@ -174,9 +186,6 @@ class PsychAdapter(nn.Module):
         # set up for evaluating
         self.decoder.eval()
         self.transform_matrix.eval()
-
-        # load training args
-        training_args = torch.load(os.path.join(model_dir, 'training_args.bin'))
 
         return
 
@@ -210,6 +219,3 @@ def top_k_top_p_filtering(logits, top_k=0, top_p=0.0, filter_value=-float('Inf')
         indices_to_remove = sorted_indices_to_remove.scatter(dim=1, index=sorted_indices, src=sorted_indices_to_remove)
         logits[indices_to_remove] = filter_value
     return logits
-
-
-
