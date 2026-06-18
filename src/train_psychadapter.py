@@ -518,9 +518,9 @@ def main():
         peft_config = LoraConfig(inference_mode=False, r=8, lora_alpha=32, lora_dropout=0.1, target_modules=["c_proj"])
     else:
         peft_config = LoraConfig(inference_mode=False, r=8, lora_alpha=32, lora_dropout=0.1, target_modules=["q_proj", "o_proj", "k_proj", "v_proj", "gate_proj", "up_proj", "down_proj"])
-    model = get_peft_model(model, peft_config)
+    model.decoder = get_peft_model(model.decoder, peft_config)
     logger.info("PEFT trainable parameters: ")
-    model.print_trainable_parameters()
+    model.decoder.print_trainable_parameters()
 
     # send model to GPU
     model.to(args.device)
