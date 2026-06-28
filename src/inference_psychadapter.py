@@ -23,7 +23,7 @@ def set_seed(args):
         torch.cuda.manual_seed_all(args.seed)
 
 def run_inference(model, args, device):
-    
+
     # retrieve embeddings
     data_df = pd.read_csv(args.train_data_file, header = 0, index_col = 0)
     training_sentences_embeddings = data_df.iloc[:,1:].values
@@ -55,20 +55,20 @@ def run_inference(model, args, device):
     # generate text for each hidden dimension
     hidden_size = means.shape[0]
     for i in range(hidden_size):
-    
+
         # print banner
         banner = "DIMENSION NUMBER {} ({}) : ".format(str(i), dimensions_name[i])
         print("="*len(banner))
-        print(banner)   
+        print(banner)
         print("="*len(banner))
 
         # traveling std range and generating text
         for std_position in np.arange(explore_std_range[0], explore_std_range[1], std_step_interval):
-        
+
             print("Sampling text at position Mean + ({})*Std:".format(round(std_position,2)))
             generated_samples = []   # avoid repeated generated_sample
-            for _ in range(args.generate_num):     
-                
+            for _ in range(args.generate_num):
+
                 # sample embedding around embedding + std_position*stds[i]
                 embedding_sample = np.copy(means)
                 embedding_sample[i] = embedding_sample[i] + std_position*stds[i]
@@ -78,18 +78,20 @@ def run_inference(model, args, device):
 
                 # generate sentence
                 # caveat: when generating, remove duplicated generation by checking newly generated text with already generated set
-                generated_count = 0    
+                generated_count = 0
                 while True:
                     generated_sample, decoder_attentions_sample = model.inference(prompting_text = args.prompting_text, sentence_embedding = embedding_sample, args = args, device = device)
                     generated_sample =  model.tokenizer.decode(generated_sample[0].tolist(), clean_up_tokenization_spaces=True)
                     generated_count += 1
-                    first_endoftext = generated_sample.find("<eos>") 
-                    generated_sample_clean = generated_sample[:(first_endoftext + len("<eos>")) if first_endoftext>0 else len(generated_sample)]
-                    generated_sample_clean = generated_sample_clean.replace("<bos>","<bos> ").replace("<eos>"," <eos>")
+                    eos_token = model.tokenizer.eos_token
+                    bos_token = model.tokenizer.bos_token
+                    first_endoftext = generated_sample.find(eos_token)
+                    generated_sample_clean = generated_sample[:(first_endoftext + len(eos_token)) if first_endoftext>0 else len(generated_sample)]
+                    generated_sample_clean = generated_sample_clean.replace(bos_token, bos_token + " ").replace(eos_token, " " + eos_token)
                     if (generated_sample_clean not in generated_samples) or generated_count >= 10:
                         generated_samples.append(generated_sample_clean)
                         break
-                    
+
                 # print generated sentence sample
                 print("  ", generated_sample_clean)
             print("\n")
@@ -102,21 +104,21 @@ def main():
 
     # dataset/save path parameters
     parser.add_argument("--train_data_file", default=None, type=str, required=False,
-                        help="Training data file, which also be used in inferencing for calculating mean and std values for each psychological variable.")                      
+                        help="Training data file, which also be used in inferencing for calculating mean and std values for each psychological variable.")
     parser.add_argument("--output_dir", default=None, type=str, required=False,
                         help="The output directory where the model predictions and checkpoints will be saved or loaded when inferencing.")
     parser.add_argument("--checkpoint_step", default=None, type=str, required=False,
                         help="Checkpoint step to load trained PEFT parameters from.")
     parser.add_argument("--psych_variables", default=None, type=str, required=True,
                         help="Psychological variables for generation. Currently supporting: big5, dep, swl.")
-         
+
     # model parameters
     parser.add_argument("--model_name_or_path", default="google/gemma-2b", type=str,
                         help="The base model checkpoint for weights initialization.")
     parser.add_argument("--latent_size", default=-1, type=int, required=True,
-                        help="Size of psychological variables vector. E.g., --latent_size=5 for big5; --latent_size=1 for dep/swl.")    
+                        help="Size of psychological variables vector. E.g., --latent_size=5 for big5; --latent_size=1 for dep/swl.")
     parser.add_argument("--do_lower_case", action='store_true',
-                        help="Set this flag if you are using an uncased model.") 
+                        help="Set this flag if you are using an uncased model.")
 
     # generating parameters
     parser.add_argument("--generate_num", type=int, default=10,
@@ -141,8 +143,8 @@ def main():
 
     # parsing parameters
     args = parser.parse_args()
-    
-    
+
+
     # =========== checking parameters and setting up  =========== #
 
     # setup CUDA, GPU & distributed training
@@ -159,24 +161,30 @@ def main():
 
     # =========== bulilding model and inferencing  =========== #
     # building model
-    model = PsychAdapter(args.model_name_or_path, args.latent_size)
-    
+    model = PsychAdapter(args.model_name_or_path, args.latent_size, is_inference=True)
+
     # load from checkpoint model
     output_dir_basemodel = os.path.join(args.output_dir, 'base_model')
     output_dir_currentstep = os.path.join(args.output_dir, 'checkpoint-{}'.format(args.checkpoint_step))
-    # load base model
+    # load base model (decoder + tokenizer + initial transform_matrix)
     model.from_checkpoint(args, output_dir_basemodel)
-    # load peft
-    peft_model_id = output_dir_currentstep
-    model = PeftModel.from_pretrained(model, peft_model_id)
+    # load peft (LoRA adapter on decoder only)
+    model.decoder = PeftModel.from_pretrained(model.decoder, output_dir_currentstep)
+    # override transform_matrix with trained weights from checkpoint
+    transform_matrix_path = os.path.join(output_dir_currentstep, 'transform_matrix', 'transform_matrix.weights')
+    if os.path.exists(transform_matrix_path):
+        model.transform_matrix.load_state_dict(torch.load(transform_matrix_path, map_location='cpu'))
+        logger.info("Loaded trained transform_matrix from %s", transform_matrix_path)
+    else:
+        logger.warning("No trained transform_matrix found at %s, using base_model weights", transform_matrix_path)
 
     # send model to GPU
-    model.to(args.device)    
+    model.to(args.device)
     model.eval()
 
     # logging info
-    print("Inference parameters %s", args)
-    
+    logger.info("Inference parameters %s", args)
+
     # check model size on memory
     mem_params = sum([param.nelement()*param.element_size() for param in model.parameters()])
     mem_bufs = sum([buf.nelement()*buf.element_size() for buf in model.buffers()])
@@ -185,8 +193,8 @@ def main():
 
     # testing inference
     args.model_config = model.model_config
-    
-    run_inference(model, args, device)    
-    
+
+    run_inference(model, args, device)
+
 if __name__ == "__main__":
     main()
